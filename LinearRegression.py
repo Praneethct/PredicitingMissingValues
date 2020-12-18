@@ -2,46 +2,43 @@ import numpy as np
 
 class LinearRegression():
     
-    def __init__(self, method = None, lambda_value = 0.1):
+    def __init__(self, method = None, _lambda = 0.1):
         self.method = method
-        self.lambda_value = lambda_value
+        self._lambda = _lambda
         
-    def prepare_data(self, data, target):
+    def generate_data(self, data, target):
         data['Bias'] = 1
-        self.variables = data.drop(target, axis = 1).columns
         self.X = data.drop(target, axis = 1).values
         data.drop('Bias', axis = 1, inplace = True)
         self.Y = data[target].values
+
+    def update_weights(self):
+        for i in range(len(self.weights)):
+            denominator = np.matmul(self.X[:,i].T, self.X[:,i])
+            pred = (self.Y - np.matmul(self.X,self.weights))
+            upper_bound = (np.matmul((-1 * self.X[:,i].T), pred) + (self._lambda/2))/ denominator
+            lower_bound = (np.matmul((-1 * self.X[:,i].T), pred) - (self._lambda/2))/ denominator
+            if  upper_bound < self.weights[i] :
+                self.weights[i] = self.weights[i] + (np.matmul((self.X[:,i].T),pred) - (self._lambda/2))/ denominator
+            elif lower_bound > self.weights[i] :
+                self.weights[i] = self.weights[i] +(np.matmul((self.X[:,i].T),pred) + (self._lambda/2))/ denominator
+            else:
+                self.weights[i] = 0
         
     def fit(self, data, target):
         self.data = data
         self.target = target
-        self.prepare_data(self.data, self.target)
+        self.generate_data(self.data, self.target)
         
-        if self.method == None :
+        if self.method == "Linear" or not self.method:
             self.weights = np.matmul(np.linalg.inv(np.matmul(self.X.T, self.X)), np.matmul(self.X.T, self.Y))
         elif self.method == "Ridge" :
-            #print(self.X.T)
-            #print(np.matmul(self.X.T, self.X))
-            self.weights = np.matmul(np.linalg.inv(np.matmul(self.X.T, self.X) + (self.lambda_value * np.identity(self.X.shape[1]))), np.matmul(self.X.T, self.Y))
+            self.weights = np.matmul(np.linalg.inv(np.matmul(self.X.T, self.X) + (self._lambda * np.identity(self.X.shape[1]))), np.matmul(self.X.T, self.Y))
         elif self.method == "Lasso":
-            #print("Working..")
-            count_weight = self.X.shape[1]
-            self.weights = [0 for i in range(count_weight)]
+            self.weights = [0 for i in range(self.X.shape[1])]
             while True:
                 old_weights = self.weights.copy()
-                for i in range(len(self.weights)):
-                    denom_value = np.matmul(self.X[:,i].T, self.X[:,i])
-                    actual_value = (self.Y - np.matmul(self.X,self.weights))
-                    cal_x_upper = (np.matmul((-1 * self.X[:,i].T), actual_value) + (self.lambda_value/2))/ denom_value
-                    cal_x_lower = (np.matmul((-1 * self.X[:,i].T), actual_value) - (self.lambda_value/2))/ denom_value
-                    if  cal_x_upper < self.weights[i] :
-                        self.weights[i] = self.weights[i] + (np.matmul((self.X[:,i].T),actual_value) - (self.lambda_value/2))/ denom_value
-                    elif cal_x_lower > self.weights[i] :
-                        self.weights[i] = self.weights[i] +(np.matmul((self.X[:,i].T),actual_value) + (self.lambda_value/2))/ denom_value
-                    else:
-                        self.weights[i] = 0
-                #Stopping criteria
+                update_weights()
                 updates = [k - l for k, l in zip(old_weights, self.weights)]
                 if max(updates) < 1e-2 and abs(min(updates)) < 1e-2:
                     break
