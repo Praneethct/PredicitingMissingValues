@@ -5,25 +5,16 @@ from statistics import mean
 class NeuralNetwork():
     
     def __init__(self, X = None , y = None, layers = [5, 2], learning_rate = 0.01, 
-                epochs = 5, method = 'Linear', tol = 0.1, batch_size = 250):
+                epochs = 5, tol = 0.1, batch_size = 250):
         self.weights = None
         self.X = X
         self.y = y
         self.activationHidden = self.sigmoid
         self.method = method
-        if self.method == 'Linear':
-            self.activationOut = self.linear
-            self.derivate_out = self.linear_der
-            self.out_class = 'Linear'
-        elif self.method == 'Classification' and len(np.unique(self.y)) == 2:
-            self.out_class = 'Binary'
-            self.activationOut = self.sigmoid
-            self.derivate_out = self.sigmoid_der
-        elif self.method == 'Classification' and len(np.unique(self.y)) > 2:
-            self.out_class = 'MultiClass'
+        self.activationOut = self.linear
+        self.derivate_out = self.linear_der
+        self.out_class = 'Linear'
         self.layers = layers
-            #self.activationOut = self.softmax
-            #self.derivate_out = self.softmax_der
         self.derivate_rest = self.sigmoid_der
         self.learning_rate = learning_rate
         self.epochs = epochs
@@ -45,10 +36,7 @@ class NeuralNetwork():
                     temp.append(np.random.normal(0,0.4, size = 1 + self.layers[i-1]))
             self.weights.append(temp)
         #Weights for the final output layer
-        if self.out_class == 'MultiClass':
-            self.outputLayerWeights =  np.random.normal(0,0.4, size = ( len(np.unique(self.y)), 1 + self.layers[-1]))
-        else:
-            self.outputLayerWeights =  np.random.normal(0,0.4, size = 1 + self.layers[-1])
+        self.outputLayerWeights =  np.random.normal(0,0.4, size = 1 + self.layers[-1])
     
     def gradientInitialisation(self):
         self.gradient = []
@@ -62,10 +50,7 @@ class NeuralNetwork():
                 else:
                     temp.append(np.zeros(1 + self.layers[i-1]))
             self.gradient.append(temp)
-        if self.out_class == 'MultiClass':
-            self.gradientOutputLayer = np.zeros(shape = (len(np.unique(self.y)), 1 + self.layers[-1]))
-        else:
-            self.gradientOutputLayer = [0] * len(self.outputLayerWeights)
+        self.gradientOutputLayer = [0] * len(self.outputLayerWeights)
     
     def sigmoid(self,x):
         if x < 0:
@@ -82,36 +67,14 @@ class NeuralNetwork():
     def linear_der(self, x):
         return 1.0
     
-    def softmax(self,x):
-        shiftx = x - np.max(x)
-        exps = np.exp(shiftx)
-        return exps / np.sum(exps)
-    
     def squareErrorLoss(self,x,y):
         return (self.feedForward(x) - y)**2
     
     def error(self, X, y):
-        if self.out_class == 'Linear':
-            pred= []
-            for i in X:
-                pred.append(self.feedForward(i))
-            return mean([(a_i - b_i)**2 for a_i, b_i in zip(pred, y)])
-        elif self.out_class == 'Binary':
-            error = 0
-            for i in range(len(X)):
-                prob = self.feedForward(X[i])
-                if (prob <0.5 and y[i] == 1) or (prob >=0.5 and y[i] == 0):
-                    error = error + 1
-            return error/X.shape[0]
-        elif self.out_class == 'MultiClass':
-            error = 0
-            y = self.onehotencoding(y)
-            for i in range(len(X)):
-                prob = self.feedForward(X[i])
-                class_pred = list(prob).index(max(prob))
-                if class_pred != list(y[i]).index(1):
-                    error = error + 1
-            return error/X.shape[0]
+        pred= []
+        for i in X:
+            pred.append(self.feedForward(i))
+        return mean([(a_i - b_i)**2 for a_i, b_i in zip(pred, y)])
 
 
     def predict(self,X):
@@ -122,37 +85,10 @@ class NeuralNetwork():
 
     def predict_row(self,X):
         out = self.feedForward(X)
-        if self.out_class == 'Linear':
-            return out
-        elif self.out_class == 'Binary':
-            if out >= 0.5:
-                return 1
-            else:
-                return 0
-        elif self.out_class == 'MultiClass':
-            return list(out).index(max(out))
+        return out
     
     def loss(self, pred, actual):
-        if self.method == 'Linear' or self.out_class == 'Binary':
-            return 2.0 * (pred- actual)
-        #elif self.out_class == 'Binary':
-            #return 
-        elif self.out_class == 'MultiClass':
-            p = np.dot(pred,actual)
-            return (-1/math.log(p))
-        
-    def softmax_der(self, pred, actual, l):
-        if actual[l] == 1:
-            return pred[l]*(1 - pred[l])
-        else:
-            i = list(actual).index(1)
-            return -1*pred[l]*pred[i]
-
-    def onehotencoding(self, y):
-        out = np.zeros((len(y),int(np.max(y)+1)))
-        for i in range(len(y)):
-            out[i][int(y[i])] = 1
-        return out
+        return 2.0 * (pred- actual)
 
     def feedForward(self, x):
         self.x = np.append(x, 1.0)
@@ -169,8 +105,6 @@ class NeuralNetwork():
                 outputFromCurrLayer.append(1.0)
                 outputFromPrevLayer = outputFromCurrLayer.copy()
             #Output Layer
-            elif i == len(self.layers) and self.out_class == 'MultiClass':
-                return self.softmax(np.matmul(self.outputLayerWeights, outputFromPrevLayer))
             elif i == len(self.layers):
                 return self.activationOut(np.dot(self.outputLayerWeights,outputFromPrevLayer))
             #Rest all Layers
@@ -185,28 +119,15 @@ class NeuralNetwork():
 
     def backProp(self, pred, actual):
         #Weight updation for Output Layer
-        if self.out_class == 'Linear' or self.out_class == 'Binary':
-            delta = []
-            der_outter_layer = self.derivate_out(np.dot(np.append(self.out[len(self.layers) -1], 1.0) , self.outputLayerWeights))
-            for i in range(len(self.outputLayerWeights)):
-                if i == len(self.outputLayerWeights) - 1:
-                    self.gradientOutputLayer[i] = self.gradientOutputLayer[i] + (self.loss(pred, actual) * der_outter_layer * 1)
-                else :
-                    d = self.loss(pred, actual) * der_outter_layer * self.outputLayerWeights[i]
-                    self.gradientOutputLayer[i] = self.gradientOutputLayer[i] + (self.loss(pred, actual) * der_outter_layer * self.out[len(self.layers) -1][i])
-                    delta.append(d) 
-        elif self.out_class == 'MultiClass':
-            delta = [0] * self.layers[-1]
-            for l in range(len(self.outputLayerWeights)):
-                der_outter_layer = self.softmax_der(pred,actual, l)
-                for i in range(len(self.outputLayerWeights[l])):
-                    if i == len(self.outputLayerWeights[l]) - 1:
-                        self.gradientOutputLayer[l][i] = self.gradientOutputLayer[l][i] + (self.loss(pred, actual) * der_outter_layer * 1)
-                    else:
-                        d = self.loss(pred, actual) * der_outter_layer * self.outputLayerWeights[l][i]
-                        delta[i] = delta[i] + d
-                        self.gradientOutputLayer[l][i] = self.gradientOutputLayer[l][i] + (self.loss(pred, actual) * der_outter_layer * self.out[len(self.layers) - 1][i])       
-
+        delta = []
+        der_outter_layer = self.derivate_out(np.dot(np.append(self.out[len(self.layers) -1], 1.0) , self.outputLayerWeights))
+        for i in range(len(self.outputLayerWeights)):
+            if i == len(self.outputLayerWeights) - 1:
+                self.gradientOutputLayer[i] = self.gradientOutputLayer[i] + (self.loss(pred, actual) * der_outter_layer * 1)
+            else :
+                d = self.loss(pred, actual) * der_outter_layer * self.outputLayerWeights[i]
+                self.gradientOutputLayer[i] = self.gradientOutputLayer[i] + (self.loss(pred, actual) * der_outter_layer * self.out[len(self.layers) -1][i])
+                delta.append(d) 
         #For all other Layers
         for l in reversed(range(len(self.layers))):
             delta_forward = delta.copy()
@@ -233,13 +154,8 @@ class NeuralNetwork():
                             self.gradient[l][j][i] = self.gradient[l][j][i] + (delta_forward[j] * der_layer * self.out[l - 1][i])
     
     def updateWeights(self, n):
-        if self.out_class == 'Linear' and self.out_class == 'Binary':
-            for i in range(len(self.outputLayerWeights)):
-                self.outputLayerWeights[i] = self.outputLayerWeights[i] - (self.learning_rate *  self.gradientOutputLayer[i]/n)
-        elif self.out_class =='MultiClass':
-            for l in range(len(self.outputLayerWeights)):
-                for i in range(len(self.outputLayerWeights[l])):
-                    self.outputLayerWeights[l][i] = self.outputLayerWeights[l][i] - (self.learning_rate *  self.gradientOutputLayer[l][i]/n)
+        for i in range(len(self.outputLayerWeights)):
+            self.outputLayerWeights[i] = self.outputLayerWeights[i] - (self.learning_rate *  self.gradientOutputLayer[i]/n)
         #For all other Layers
         for l in reversed(range(len(self.layers))):
             for j in range(self.layers[l]):
@@ -250,8 +166,6 @@ class NeuralNetwork():
     def fit(self,X,y,X_val = None, Y_val = None):
         self.X = X
         self.y = y
-        if self.out_class == 'MultiClass':
-            y = self.onehotencoding(y)
         self.weightsInitialisation()
         self.gradientInitialisation()
         i = 0
@@ -270,19 +184,4 @@ class NeuralNetwork():
                 else:
                     p = self.feedForward(X[j])
                     self.backProp(p,y[j])
-            #print(nn.weights)
-#             if X_val is not None and Y_val is not None:
-#                 error_curr_val = self.error(X_val, Y_val)
-#                 print("Epoch : {} and MSE_Train : {} and MSE_Val : {}".format(i, self.error(X,y), error_curr_val))
-#                 if abs(error_val_old -error_curr_val) < self.tol :
-#                     tol_count = tol_count + 1
-#                     error_val_old = error_curr_val
-#                     if tol_count >1 :
-#                         print("Stopping as validation error did not improve more than tol = {} for 2 iterations".format(self.tol))
-#                         break
-#                 else:
-#                     tol_count = 0
-#                     error_val_old = error_curr_val
-#             else:
-#                 print("Epoch : {} and MSE : {}".format(i, self.error(X,y)))
             i = i+1
